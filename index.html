@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spyral JS Assistant</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Top bar ── */
+    #topbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #ffffff;
+      border-bottom: 1px solid #ddd;
+      flex-shrink: 0;
+    }
+
+    #topbar input[type="text"] {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+    }
+    #topbar input[type="text"]:focus { border-color: #4a90d9; }
+
+    #topbar button {
+      padding: 6px 14px;
+      background: #4a90d9;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #topbar button:hover { background: #357abd; }
+
+    /* ── Main layout ── */
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Left panel ── */
+    #left-panel {
+      flex: 2.2;
+      display: flex;
+      flex-direction: column;
+      border-right: 2px solid #ddd;
+      background: #fff;
+    }
+
+    #iframe-placeholder {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #aaa;
+      font-size: 15px;
+    }
+
+    /* ── Right panel ── */
+    #right-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #fafafa;
+      min-width: 280px;
+      max-width: 420px;
+      transition: min-width 0.2s, max-width 0.2s, flex 0.2s;
+    }
+
+    #right-panel.collapsed {
+      flex: 0 0 36px;
+      min-width: 36px;
+      max-width: 36px;
+      overflow: hidden;
+    }
+
+    #right-panel.collapsed .panel-collapsible { display: none; }
+
+    #collapse-btn {
+      font-size: 13px;
+    }
+
+    /* Vertical label shown when collapsed */
+    #collapsed-label {
+      display: none;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      font-size: 11px;
+      color: #888;
+      margin: auto;
+      padding-top: 12px;
+      user-select: none;
+    }
+    #right-panel.collapsed #collapsed-label { display: block; }
+
+    #right-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid #ddd;
+      background: #fff;
+    }
+
+    #right-header h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #444;
+      flex: 1;
+    }
+
+    .icon-btn {
+      background: none;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 15px;
+      line-height: 1;
+      color: #555;
+      margin-left: 6px;
+    }
+    .icon-btn:hover { background: #eee; }
+
+    #help-btn {
+      border-radius: 50%;
+      width: 26px; height: 26px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 0;
+    }
+
+    /* ── Provider toggle ── */
+    #provider-row {
+      display: flex;
+      border-bottom: 1px solid #eee;
+    }
+
+    .provider-tab {
+      flex: 1;
+      padding: 7px 0;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      background: #f5f5f5;
+      color: #777;
+      border: none;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .provider-tab.active {
+      background: #fff;
+      color: #4a90d9;
+      border-bottom-color: #4a90d9;
+    }
+    .provider-tab:hover:not(.active) { background: #ececec; }
+
+    /* ── Model selector ── */
+    #model-row {
+      padding: 10px 12px 8px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      border-bottom: 1px solid #eee;
+    }
+
+    #model-row label { font-size: 13px; color: #555; white-space: nowrap; }
+
+    #model-select {
+      flex: 1;
+      padding: 5px 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 13px;
+      background: #fff;
+      outline: none;
+    }
+    #model-select:focus { border-color: #4a90d9; }
+
+    /* ── Response area ── */
+    #response-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    #response-content {
+      white-space: pre-wrap;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      font-size: 12.5px;
+      background: #f0f4f8;
+      border: 1px solid #d5e0ec;
+      border-radius: 6px;
+      padding: 10px 12px;
+      min-height: 60px;
+      color: #1a2b3c;
+    }
+
+    /* ── Copy button row ── */
+    #copy-row {
+      padding: 6px 12px;
+      display: flex;
+      justify-content: flex-end;
+      border-top: 1px solid #eee;
+    }
+
+    #copy-btn {
+      padding: 5px 14px;
+      font-size: 13px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      cursor: pointer;
+      color: #333;
+    }
+    #copy-btn:hover { background: #f0f0f0; }
+    #copy-btn.copied { border-color: #4caf50; color: #4caf50; }
+
+    /* ── Query area ── */
+    #query-area {
+      border-top: 1px solid #ddd;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: #fff;
+    }
+
+    #query-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 13px;
+      resize: vertical;
+      min-height: 72px;
+      font-family: inherit;
+      outline: none;
+    }
+    #query-input:focus { border-color: #4a90d9; }
+
+    #send-btn {
+      align-self: flex-end;
+      padding: 7px 18px;
+      background: #4a90d9;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #send-btn:hover { background: #357abd; }
+    #send-btn:disabled { background: #a0b8d0; cursor: not-allowed; }
+
+    /* ── Modal shared ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal-box {
+      background: #fff;
+      border-radius: 10px;
+      padding: 24px;
+      width: 500px;
+      max-width: 92vw;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    }
+
+    .modal-box h3  { font-size: 16px; margin-bottom: 16px; color: #333; }
+    .modal-box h4  { font-size: 13px; font-weight: 600; color: #444; margin: 16px 0 6px; }
+    .modal-box p   { font-size: 13px; color: #555; line-height: 1.6; margin-bottom: 6px; }
+    .modal-box pre {
+      background: #f0f4f8;
+      border: 1px solid #d5e0ec;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-family: "SF Mono", "Fira Code", monospace;
+      margin-bottom: 6px;
+      white-space: pre-wrap;
+    }
+    .modal-box code {
+      background: #f0f4f8;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-size: 12px;
+      font-family: "SF Mono", "Fira Code", monospace;
+    }
+
+    .modal-box label {
+      font-size: 13px;
+      color: #555;
+      display: block;
+      margin-bottom: 5px;
+      margin-top: 14px;
+    }
+    .modal-box label:first-of-type { margin-top: 0; }
+
+    .modal-box textarea, .modal-box input[type="password"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+    }
+    .modal-box textarea:focus,
+    .modal-box input[type="password"]:focus { border-color: #4a90d9; }
+
+    #system-prompt-input { min-height: 100px; resize: vertical; }
+
+    .modal-divider {
+      border: none;
+      border-top: 1px solid #eee;
+      margin: 18px 0 4px;
+    }
+
+    .api-key-note {
+      font-size: 11.5px;
+      color: #999;
+      margin-top: 5px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .btn-secondary {
+      padding: 7px 16px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn-secondary:hover { background: #f0f0f0; }
+
+    .btn-primary {
+      padding: 7px 16px;
+      background: #4a90d9;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn-primary:hover { background: #357abd; }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid #ccc;
+      border-top-color: #4a90d9;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- Top URL bar -->
+<div id="topbar">
+  <input type="text" id="url-input" placeholder="Enter URL (e.g. http://localhost:8888/...)" value="https://voyant-tools.org/spyral/" />
+  <button id="go-btn">Go</button>
+</div>
+
+<!-- Main two-panel layout -->
+<div id="main">
+
+  <!-- Left: iframe viewer -->
+  <div id="left-panel">
+    <div id="iframe-placeholder">Enter a URL above to load a page</div>
+  </div>
+
+  <!-- Right: assistant -->
+  <div id="right-panel">
+
+    <div id="right-header">
+      <h2 id="panel-title" class="panel-collapsible">JS Assistant</h2>
+      <button class="icon-btn panel-collapsible" id="help-btn" title="Help">?</button>
+      <button class="icon-btn panel-collapsible" id="settings-btn" title="Settings">⚙</button>
+      <button class="icon-btn" id="collapse-btn" title="Collapse panel">›</button>
+    </div>
+
+    <div id="collapsed-label">JS Assistant</div>
+
+    <!-- Provider toggle -->
+    <div id="provider-row" class="panel-collapsible">
+      <button class="provider-tab active" data-provider="ollama">Ollama</button>
+      <button class="provider-tab" data-provider="claude">Claude</button>
+    </div>
+
+    <!-- Model selector -->
+    <div id="model-row" class="panel-collapsible">
+      <label for="model-select">Model:</label>
+      <select id="model-select">
+        <option value="">Loading…</option>
+      </select>
+    </div>
+
+    <!-- Response -->
+    <div id="response-area" class="panel-collapsible">
+      <div style="color:#bbb;font-style:italic;font-size:13px;">Response will appear here…</div>
+    </div>
+
+    <div id="copy-row" class="panel-collapsible">
+      <button id="copy-btn">Copy code</button>
+    </div>
+
+    <!-- Query -->
+    <div id="query-area" class="panel-collapsible">
+      <textarea id="query-input" placeholder="Ask for JavaScript code…&#10;(Shift+Enter for new line, Enter to send)"></textarea>
+      <button id="send-btn">Send</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Help modal ── -->
+<div id="help-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <h3>Getting Started</h3>
+    <p>You can usually just open <code>index.html</code> directly in your browser — no server required. Both Claude and Ollama requests go straight from your browser to their APIs.</p>
+    <h4>1. Ollama — make sure it is running</h4>
+    <p>The Ollama desktop app or <code>ollama serve</code> must be running so local models can be loaded.</p>
+    <h4>2. Claude — enter your API key in Settings (⚙)</h4>
+    <p>Your key is held in memory only and is deleted when you close the page. Requests are sent directly to Anthropic from the browser.</p>
+    <h4>3. If your browser blocks a direct call (CORS)</h4>
+    <p>Ollama in particular rejects requests from pages opened as a plain file, so this is common. The app automatically falls back to a local proxy server for either provider — but the fallback only works if that server is running. Start it in a terminal and open <code>http://localhost:8080</code> instead of the file directly:</p>
+    <pre>cd "/Users/geoffreyrockwell/Documents/AI Projects/spyral2LLM"
+python3 server.py</pre>
+    <div class="modal-actions">
+      <button class="btn-primary" id="help-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Settings modal ── -->
+<div id="settings-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <h3>Settings</h3>
+
+    <label for="system-prompt-input">System prompt (sent with every query):</label>
+    <textarea id="system-prompt-input"></textarea>
+
+    <hr class="modal-divider" />
+
+    <label for="claude-api-key-input">Anthropic API key <span style="color:#aaa;font-weight:400;">(Claude only)</span>:</label>
+    <input type="password" id="claude-api-key-input" placeholder="sk-ant-…" autocomplete="off" />
+    <p class="api-key-note">Stored in memory only — cleared automatically when you close this page.</p>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" id="settings-cancel">Cancel</button>
+      <button class="btn-primary" id="settings-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const OLLAMA_BASE = "http://localhost:11434";
+  const OLLAMA_PROXY_TAGS_URL = "/api/ollama/tags"; // fallback if direct call is CORS-blocked; needs server.py running
+  const OLLAMA_PROXY_CHAT_URL = "/api/ollama/chat"; // fallback if direct call is CORS-blocked; needs server.py running
+  const ANTHROPIC_DIRECT_URL = "https://api.anthropic.com/v1/messages"; // called straight from the browser
+  const ANTHROPIC_PROXY_URL  = "/api/claude"; // fallback if direct call is CORS-blocked; needs server.py running
+  const ANTHROPIC_VERSION = "2023-06-01";
+
+  const CLAUDE_MODELS = [
+    { id: "claude-opus-4-6",            label: "Claude Opus 4.6" },
+    { id: "claude-sonnet-4-6",          label: "Claude Sonnet 4.6" },
+    { id: "claude-haiku-4-5-20251001",  label: "Claude Haiku 4.5" },
+  ];
+
+  const DEFAULT_SYSTEM_PROMPT =
+    "You are an expert JavaScript coding assistant. " +
+    "When the user asks for code, respond with clean, well-commented JavaScript. " +
+    "Provide only the code and brief explanations — no lengthy preamble.";
+
+  // ── State (API key intentionally NOT in localStorage) ──
+  let provider       = "ollama";   // "ollama" | "claude"
+  let systemPrompt   = localStorage.getItem("js_assistant_system_prompt") ?? DEFAULT_SYSTEM_PROMPT;
+  let claudeApiKey   = "";         // session-only
+  let isStreaming    = false;
+  let currentResponseText = "";
+
+  // ── Elements ───────────────────────────────────────────
+  const urlInput          = document.getElementById("url-input");
+  const goBtn             = document.getElementById("go-btn");
+  const leftPanel         = document.getElementById("left-panel");
+  const panelTitle        = document.getElementById("panel-title");
+  const providerTabs      = document.querySelectorAll(".provider-tab");
+  const modelSelect       = document.getElementById("model-select");
+  const responseArea      = document.getElementById("response-area");
+  const copyBtn           = document.getElementById("copy-btn");
+  const queryInput        = document.getElementById("query-input");
+  const sendBtn           = document.getElementById("send-btn");
+
+  const helpOverlay       = document.getElementById("help-overlay");
+  const settingsOverlay   = document.getElementById("settings-overlay");
+  const systemPromptInput = document.getElementById("system-prompt-input");
+  const claudeApiKeyInput = document.getElementById("claude-api-key-input");
+
+  // ── URL / iframe ───────────────────────────────────────
+  function loadUrl() {
+    let url = urlInput.value.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    urlInput.value = url;
+
+    leftPanel.querySelector("iframe")?.remove();
+    document.getElementById("iframe-placeholder")?.remove();
+
+    const iframe = document.createElement("iframe");
+    iframe.src = url;
+    Object.assign(iframe.style, { flex: "1", border: "none", width: "100%" });
+    leftPanel.appendChild(iframe);
+  }
+
+  goBtn.addEventListener("click", loadUrl);
+  urlInput.addEventListener("keydown", e => { if (e.key === "Enter") loadUrl(); });
+
+  // ── Provider toggle ────────────────────────────────────
+  providerTabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      provider = tab.dataset.provider;
+      providerTabs.forEach(t => t.classList.toggle("active", t === tab));
+      panelTitle.textContent = provider === "claude" ? "Claude JS Assistant" : "Ollama JS Assistant";
+      // Reset any stuck streaming state from the previous provider
+      isStreaming = false;
+      sendBtn.disabled = false;
+      populateModels();
+    });
+  });
+
+  // ── Model dropdown ─────────────────────────────────────
+  async function populateModels() {
+    if (provider === "claude") {
+      modelSelect.innerHTML = CLAUDE_MODELS
+        .map(m => `<option value="${m.id}">${m.label}</option>`).join("");
+      return;
+    }
+    // Ollama
+    modelSelect.innerHTML = `<option value="">Loading…</option>`;
+    let data;
+    try {
+      const res = await fetch(`${OLLAMA_BASE}/api/tags`);
+      if (!res.ok) throw new Error();
+      data = await res.json();
+    } catch {
+      // Likely CORS-blocked (e.g. page opened via file://, which Ollama
+      // rejects by default) — retry through the local proxy server.
+      try {
+        const res = await fetch(OLLAMA_PROXY_TAGS_URL);
+        if (!res.ok) throw new Error();
+        data = await res.json();
+      } catch {
+        modelSelect.innerHTML = `<option value="">Could not reach Ollama</option>`;
+        return;
+      }
+    }
+    const models = data.models ?? [];
+    modelSelect.innerHTML = models.length
+      ? models.map(m => `<option value="${m.name}">${m.name}</option>`).join("")
+      : `<option value="">No models found</option>`;
+  }
+
+  populateModels();
+
+  // ── Send query ─────────────────────────────────────────
+  function showSpinnerAndContent() {
+    responseArea.innerHTML = `<span class="spinner"></span><div id="response-content"></div>`;
+  }
+
+  function appendToken(token) {
+    currentResponseText += token;
+    const spinner = responseArea.querySelector(".spinner");
+    if (spinner) spinner.remove();
+    let el = document.getElementById("response-content");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "response-content";
+      responseArea.appendChild(el);
+    }
+    el.textContent = currentResponseText;
+    responseArea.scrollTop = responseArea.scrollHeight;
+  }
+
+  function showError(msg) {
+    responseArea.innerHTML =
+      `<div style="color:#c0392b;font-size:13px;">${msg}</div>`;
+  }
+
+  async function sendOllamaVia(url, model, query) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        stream: true,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user",   content: query }
+        ]
+      })
+    });
+    if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (const line of decoder.decode(value, { stream: true }).split("\n")) {
+        if (!line.trim()) continue;
+        try {
+          const obj = JSON.parse(line);
+          appendToken(obj?.message?.content ?? "");
+        } catch { /* partial */ }
+      }
+    }
+  }
+
+  async function sendOllama(model, query) {
+    try {
+      await sendOllamaVia(`${OLLAMA_BASE}/api/chat`, model, query);
+    } catch (err) {
+      // Same CORS-block signature as the Claude fallback: fetch() throws a
+      // TypeError before any tokens arrive, so retrying via the proxy is safe.
+      if (err instanceof TypeError) {
+        console.warn("Direct Ollama call failed (likely CORS) — falling back to local proxy server:", err);
+        currentResponseText = "";
+        showSpinnerAndContent();
+        await sendOllamaVia(OLLAMA_PROXY_CHAT_URL, model, query);
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  // direct: true = calling api.anthropic.com straight from the browser (needs the
+  // "dangerous direct browser access" header); false = going through the local
+  // server.py proxy, which already holds a real x-api-key relationship with Anthropic.
+  async function sendClaudeVia(url, direct, model, query) {
+    const headers = {
+      "Content-Type":    "application/json",
+      "x-api-key":       claudeApiKey,
+      "anthropic-version": ANTHROPIC_VERSION,
+    };
+    if (direct) headers["anthropic-dangerous-direct-browser-access"] = "true";
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model,
+        max_tokens: 4096,
+        system: systemPrompt,
+        stream: true,
+        messages: [{ role: "user", content: query }]
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message ?? `Claude API returned ${res.status}`);
+    }
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const raw = decoder.decode(value, { stream: true });
+      // SSE lines: "data: {...}"
+      for (const line of raw.split("\n")) {
+        if (!line.startsWith("data: ")) continue;
+        const payload = line.slice(6).trim();
+        if (payload === "[DONE]") continue;
+        try {
+          const obj = JSON.parse(payload);
+          if (obj.type === "content_block_delta" && obj.delta?.type === "text_delta") {
+            appendToken(obj.delta.text);
+          }
+        } catch { /* partial */ }
+      }
+    }
+  }
+
+  async function sendClaude(model, query) {
+    if (!claudeApiKey) {
+      throw new Error("No API key set. Add your Anthropic API key in Settings (⚙).");
+    }
+    try {
+      await sendClaudeVia(ANTHROPIC_DIRECT_URL, true, model, query);
+    } catch (err) {
+      // A CORS/network block surfaces as a TypeError from fetch() before any
+      // response (and therefore no tokens) come back, so it's safe to retry
+      // cleanly through the local proxy server instead.
+      if (err instanceof TypeError) {
+        console.warn("Direct Claude call failed (likely CORS) — falling back to local proxy server:", err);
+        currentResponseText = "";
+        showSpinnerAndContent();
+        await sendClaudeVia(ANTHROPIC_PROXY_URL, false, model, query);
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  async function sendQuery() {
+    const model = modelSelect.value;
+    const query = queryInput.value.trim();
+    if (!model || !query || isStreaming) return;
+
+    isStreaming = true;
+    currentResponseText = "";
+    sendBtn.disabled = true;
+    copyBtn.classList.remove("copied");
+    copyBtn.textContent = "Copy code";
+
+    showSpinnerAndContent();
+
+    try {
+      if (provider === "claude") {
+        await sendClaude(model, query);
+      } else {
+        await sendOllama(model, query);
+      }
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      isStreaming = false;
+      sendBtn.disabled = false;
+    }
+  }
+
+  sendBtn.addEventListener("click", sendQuery);
+  queryInput.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuery(); }
+  });
+
+  // ── Copy ───────────────────────────────────────────────
+  copyBtn.addEventListener("click", () => {
+    if (!currentResponseText) return;
+    navigator.clipboard.writeText(currentResponseText).then(() => {
+      copyBtn.textContent = "Copied!";
+      copyBtn.classList.add("copied");
+      setTimeout(() => {
+        copyBtn.textContent = "Copy code";
+        copyBtn.classList.remove("copied");
+      }, 2000);
+    });
+  });
+
+  // ── Collapse panel ─────────────────────────────────────
+  const rightPanel  = document.getElementById("right-panel");
+  const collapseBtn = document.getElementById("collapse-btn");
+
+  collapseBtn.addEventListener("click", () => {
+    const collapsed = rightPanel.classList.toggle("collapsed");
+    collapseBtn.textContent = collapsed ? "‹" : "›";
+    collapseBtn.title = collapsed ? "Expand panel" : "Collapse panel";
+  });
+
+  // ── Help modal ─────────────────────────────────────────
+  document.getElementById("help-btn").addEventListener("click",
+    () => helpOverlay.classList.add("open"));
+  document.getElementById("help-close").addEventListener("click",
+    () => helpOverlay.classList.remove("open"));
+  helpOverlay.addEventListener("click",
+    e => { if (e.target === helpOverlay) helpOverlay.classList.remove("open"); });
+
+  // ── Settings modal ─────────────────────────────────────
+  document.getElementById("settings-btn").addEventListener("click", () => {
+    systemPromptInput.value = systemPrompt;
+    claudeApiKeyInput.value = claudeApiKey;
+    settingsOverlay.classList.add("open");
+  });
+
+  document.getElementById("settings-cancel").addEventListener("click",
+    () => settingsOverlay.classList.remove("open"));
+
+  document.getElementById("settings-save").addEventListener("click", () => {
+    systemPrompt = systemPromptInput.value.trim() || DEFAULT_SYSTEM_PROMPT;
+    claudeApiKey = claudeApiKeyInput.value.trim();
+    localStorage.setItem("js_assistant_system_prompt", systemPrompt);
+    // claudeApiKey intentionally NOT saved to localStorage
+    settingsOverlay.classList.remove("open");
+  });
+
+  settingsOverlay.addEventListener("click",
+    e => { if (e.target === settingsOverlay) settingsOverlay.classList.remove("open"); });
+</script>
+</body>
+</html>
