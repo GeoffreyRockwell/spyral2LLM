@@ -72,3 +72,7 @@ the page.
 - `index.html` — the app (UI, provider/model selection, chat logic)
 - `server.py` — optional local proxy used as a CORS fallback for both
   Ollama and Claude
+
+## Credits
+
+This tool was created by Geoffrey Rockwell using Claude Code. It was created as an experiment in combining AI with Voyant/Spyral.
